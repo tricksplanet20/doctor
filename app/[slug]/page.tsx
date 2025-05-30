@@ -1,13 +1,49 @@
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 import DoctorPageClient from './DoctorPageClient';
 import { clientPromise } from '@/lib/mongodb';
 import Breadcrumbs from '@/components/Breadcrumbs';
+import { createSafeUrl } from '@/lib/urlHelpers';
 
-interface Props {
-  params: { slug: string }
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+function generateBreadcrumbs(doctorData: any): BreadcrumbItem[] {
+  const breadcrumbs: BreadcrumbItem[] = [{ label: 'Home', href: '/' }];
+
+  if (doctorData.Location) {
+    breadcrumbs.push({
+      label: doctorData.Location,
+      href: `/hospitals/${encodeURIComponent(doctorData.Location)}`
+    });
+  }
+
+  if (doctorData.Location && doctorData["Hospital Name"]) {
+    const hospitalSlug = createSafeUrl(doctorData["Hospital Name"]);
+    breadcrumbs.push({
+      label: doctorData["Hospital Name"],
+      href: `/hospitals/${encodeURIComponent(doctorData.Location)}/${hospitalSlug}`
+    });
+  }
+
+  if (doctorData.Location && doctorData.Speciality) {
+    const specialitySlug = doctorData.SP_Slug || createSafeUrl(doctorData.Speciality);
+    breadcrumbs.push({
+      label: doctorData.Speciality,
+      href: `/specialists/${encodeURIComponent(doctorData.Location)}/${specialitySlug}`
+    });
+  }
+
+  if (doctorData["Doctor Name"]) {
+    breadcrumbs.push({ label: doctorData["Doctor Name"] }); // Last item doesn't need href
+  }
+
+  return breadcrumbs;
+}
+
+// @ts-ignore -- Next.js type issue
+export async function generateMetadata({ params }: { params: { slug: string }}): Promise<Metadata> {
   const slug = decodeURIComponent(params.slug);
   
   try {
@@ -79,13 +115,51 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function DoctorPage({ params }: Props) {
+export async function generateStaticParams() {
+  const client = await clientPromise;
+  const db = client.db(process.env.MONGODB_DB_NAME);
+  const doctors = await db.collection('doctor_info')
+    .find(
+      { Slug: { $exists: true, $ne: null } },
+      { projection: { Slug: 1 } }
+    )
+    .toArray();
+  
+  return doctors
+    .filter(doc => doc && doc.Slug)
+    .map(doc => ({ slug: doc.Slug }));
+}
+
+export const revalidate = 60;
+
+// @ts-ignore -- Next.js type issue
+export default async function DoctorPage({ params }: { params: { slug: string }}) {
   const slug = decodeURIComponent(params.slug);
   
   try {
     const client = await clientPromise;
     const db = client.db(process.env.MONGODB_DB_NAME);
-    const doctor = await db.collection('doctor_info').findOne({ Slug: slug });
+    const doctor = await db.collection('doctor_info').findOne(
+      { Slug: slug },
+      {
+        projection: {
+          "Doctor Name": 1,
+          "Photo URL": 1,
+          Degree: 1,
+          Speciality: 1,
+          SP_Slug: 1,
+          Designation: 1,
+          Workplace: 1,
+          About: 1,
+          "Hospital Name": 1,
+          Address: 1,
+          Location: 1,
+          "Visiting Hours": 1,
+          "Appointment Number": 1,
+          Slug: 1
+        }
+      }
+    );
 
     if (!doctor) {
       return (
@@ -96,12 +170,13 @@ export default async function DoctorPage({ params }: Props) {
       );
     }
 
-    // Map MongoDB result to Doctor interface explicitly
+    // Map MongoDB result to Doctor interface explicitly with fallbacks
     const doctorData = {
       "Doctor Name": doctor["Doctor Name"] ?? "",
       "Photo URL": doctor["Photo URL"] ?? "",
       Degree: doctor.Degree ?? "",
       Speciality: doctor.Speciality ?? "",
+      SP_Slug: doctor.SP_Slug ?? "",
       Designation: doctor.Designation ?? "",
       Workplace: doctor.Workplace ?? "",
       About: doctor.About ?? "",
@@ -112,17 +187,10 @@ export default async function DoctorPage({ params }: Props) {
       "Appointment Number": doctor["Appointment Number"] ?? "",
       Slug: doctor["Slug"] ?? ""
     };
+
     return (
       <>
-        <Breadcrumbs
-          items={[
-            { label: 'Home', href: '/' },
-            { label: doctorData.Location, href: `/hospitals/${encodeURIComponent(doctorData.Location)}` },
-            { label: doctorData["Hospital Name"], href: `/hospitals/${encodeURIComponent(doctorData.Location)}/${doctorData["Hospital Name"].replace(/\s+/g, '-').toLowerCase()}` },
-            { label: doctorData.Speciality, href: `/specialists/${encodeURIComponent(doctorData.Location)}/${doctorData.Speciality.toLowerCase().replace(/\s+/g, '-')}` },
-            { label: doctorData["Doctor Name"] }
-          ]}
-        />
+        <Breadcrumbs items={generateBreadcrumbs(doctorData)} />
         <DoctorPageClient doctor={doctorData} />
       </>
     );

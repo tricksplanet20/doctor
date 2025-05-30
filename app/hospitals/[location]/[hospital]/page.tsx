@@ -6,11 +6,15 @@ import Breadcrumbs from '@/components/Breadcrumbs';
 import styles from './HospitalPage.module.css';
 import { slugify } from '@/lib/utils';
 
-interface Props {
-  params: { location: string; hospital: string };
+interface PageProps {
+  params: {
+    location: string;
+    hospital: string;
+  };
+  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const location = decodeURIComponent(params.location);
   const hospitalSlug = decodeURIComponent(params.hospital);
   const client = await clientPromise;
@@ -40,7 +44,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function HospitalDoctorListPage({ params }: Props) {
+export async function generateStaticParams(): Promise<{ location: string; hospital: string }[]> {
+  const client = await clientPromise;
+  const db = client.db(process.env.MONGODB_DB_NAME);
+  const hospitals = await db.collection('doctor_info').aggregate([
+    { $group: { _id: { location: '$Location', hospital: '$Hospital Name' } } }
+  ]).toArray();
+  return hospitals.map(h => ({
+    location: h._id.location,
+    hospital: h._id.hospital.toLowerCase().replace(/\s+/g, '-')
+  }));
+}
+
+export const revalidate = 60;
+
+export default async function HospitalDoctorListPage({ params }: PageProps) {
   const location = decodeURIComponent(params.location);
   const hospitalSlug = decodeURIComponent(params.hospital);
   const client = await clientPromise;

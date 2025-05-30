@@ -20,14 +20,14 @@ export async function GET(req: NextRequest) {
     const client = await clientPromise;
     const db = client.db(process.env.MONGODB_DB_NAME);
 
-    // Parse query parameters
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '24');
-    const name = searchParams.get('name');
-    const speciality = searchParams.get('speciality');
-    const location = searchParams.get('location');
-    const hospital = searchParams.get('hospital');
-    const sortBy = searchParams.get('sortBy') || 'name';
+    // Parse query parameters with validation
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '24') || 24));
+    const name = searchParams.get('name')?.toString() || '';
+    const speciality = searchParams.get('speciality')?.toString() || '';
+    const location = searchParams.get('location')?.toString() || '';
+    const hospital = searchParams.get('hospital')?.toString() || '';
+    const sortBy = searchParams.get('sortBy')?.toString() || 'name';
 
     // Handle metadata-only requests
     if (searchParams.get('specialties')) {
@@ -61,25 +61,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ hospitals }, {
         headers: corsHeaders
       });
-    }
-
-    if (searchParams.get('uniqueLocationSpecialityPairs')) {
+    }    if (searchParams.get('uniqueLocationSpecialityPairs')) {
       // For each (location, Speciality) pair, count doctors and return only pairs with count > 0
-      const pairs = await db.collection('doctor_info').aggregate([
-        { $match: { Location: { $ne: null }, Speciality: { $ne: null } } },
-        { $group: { _id: { location: "$Location", speciality: "$Speciality" }, count: { $sum: 1 } } },
-        { $match: { count: { $gt: 0 } } },
-        { $project: { location: "$_id.location", speciality: "$_id.speciality", slugifiedSpeciality: "", count: 1, _id: 0 } }
-      ]).toArray();
-      // Add slugifiedSpeciality for each pair
-      const { slugify } = await import('@/lib/utils');
-      const flatPairs = pairs.map(pair => ({
-        location: pair.location,
-        speciality: pair.speciality,
-        slugifiedSpeciality: slugify(pair.speciality),
-        count: pair.count
-      }));
-      return NextResponse.json({ pairs: flatPairs }, { headers: corsHeaders });
+      const pipeline = [
+        {          $match: {
+            Location: { $ne: null },
+            Speciality: { $ne: null },
+            SP_Slug: { $exists: true, $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              location: "$Location",
+              speciality: "$Speciality"
+            },
+            sp_slug: { $first: "$SP_Slug" },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $match: {
+            count: { $gt: 0 }
+          }
+        } as any,
+        {          $project: {
+            _id: 0,
+            location: "$_id.location",
+            name: "$_id.speciality",
+            slug: "$sp_slug",
+            count: 1
+          }
+        },
+        {
+          $sort: { count: -1 }
+        } as any
+      ];
+
+      const pairs = await db.collection('doctor_info').aggregate(pipeline).toArray();
+      
+      return NextResponse.json({ pairs }, { headers: corsHeaders });
     }
 
     if (searchParams.get('uniqueLocationHospitalPairs')) {

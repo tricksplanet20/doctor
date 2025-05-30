@@ -2,12 +2,15 @@
 
 import styles from './Footer.module.css';
 import Link from 'next/link';
+import React, { useEffect, useState } from 'react';
+import { createSafeUrl } from '@/lib/urlHelpers';
 import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin } from 'react-icons/fa';
-import { useEffect, useState } from 'react';
 
 interface LocationSpecialtyPair {
   location: string;
-  speciality: string;
+  name: string;  // The specialty name
+  slug: string;  // The SP_Slug value
+  count: number;
 }
 interface LocationHospitalPair {
   location: string;
@@ -37,7 +40,7 @@ export default function Footer() {
       );
     fetch('/api/doctors?uniqueLocationSpecialityPairs=true')
       .then(res => res.json())
-      .then(data => setSpecialtyPairs((data.pairs || []).filter((p: any) => p.location && p.speciality)));
+      .then(data => setSpecialtyPairs((data.pairs || []).filter((p: any) => p.location && p.name && p.slug)));
     fetch('/api/doctors?uniqueLocationHospitalPairs=true')
       .then(res => res.json())
       .then(data => setHospitalPairs((data.pairs || []).filter((p: any) => p.location && p.hospital)));
@@ -118,9 +121,10 @@ export default function Footer() {
         <div className={styles.footerSection}>
           <h4 className={styles.footerHeading}>Popular Specialties</h4>
           <ul className={styles.footerLinks}>
-            {specialtyPairs.slice(0, 10).map(pair => (
-              <li key={pair.location + pair.speciality}>
-                <Link href={`/specialists/${encodeURIComponent(pair.location)}/${pair.speciality.toLowerCase().replace(/\s+/g, '-')}`}>{pair.speciality} ({pair.location})</Link>
+            {specialtyPairs.slice(0, 10).map(pair => (              <li key={pair.location + pair.name}>
+                <Link href={`/specialists/${encodeURIComponent(pair.location)}/${pair.slug}`}>
+                  {pair.name} ({pair.location})
+                </Link>
               </li>
             ))}
           </ul>

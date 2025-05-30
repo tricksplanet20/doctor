@@ -41,19 +41,35 @@ export default async function HomePage() {
   const locations = await db.collection('doctor_info').distinct('Location');
   const hospitals = await db.collection('doctor_info').distinct('Hospital Name');
 
-  // Fetch popular specialties by location (example: top 10 for Dhaka)
+  // Fetch popular specialties by location with slugs
   const pairsAgg = await db.collection('doctor_info').aggregate([
-    { $group: { _id: { location: '$Location', speciality: '$Speciality' }, count: { $sum: 1 } } },
-    { $sort: { 'count': -1 } }
+    {
+      $match: {
+        Location: 'Dhaka',
+        Speciality: { $ne: null },
+        SP_Slug: { $exists: true, $ne: null }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          speciality: '$Speciality',
+          location: '$Location'
+        },
+        sp_slug: { $first: '$SP_Slug' },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { count: -1 } },
+    { $limit: 10 }
   ]).toArray();
-  const popularSpecialties = pairsAgg
-    .filter(pair => pair._id.location === 'Dhaka')
-    .slice(0, 10)
-    .map(pair => ({
-      name: pair._id.speciality,
-      location: pair._id.location,
-      count: pair.count
-    }));
+
+  const popularSpecialties = pairsAgg.map(pair => ({
+    name: pair._id.speciality,
+    location: pair._id.location,
+    count: pair.count,
+    slug: pair.sp_slug
+  }));
 
   return (
     <ErrorBoundary>

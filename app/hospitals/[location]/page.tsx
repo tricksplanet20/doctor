@@ -3,11 +3,14 @@ import Link from 'next/link';
 import styles from './LocationHospitals.module.css';
 import { Metadata } from 'next';
 
-interface Props {
-  params: { location: string };
+interface PageProps {
+  params: {
+    location: string;
+  };
+  searchParams?: { [key: string]: string | string[] | undefined };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const location = decodeURIComponent(params.location);
   return {
     title: `All Hospital List at ${location} — Find Doctors & Visiting Info`,
@@ -23,7 +26,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function LocationHospitalsPage({ params }: Props) {
+export async function generateStaticParams(): Promise<{ location: string }[]> {
+  const client = await clientPromise;
+  const db = client.db(process.env.MONGODB_DB_NAME);
+  const locations = await db.collection('doctor_info').distinct('Location');
+  return locations.map(location => ({ location: location }));
+}
+
+export const revalidate = 60;
+
+export default async function LocationHospitalsPage({ params }: PageProps) {
   const location = decodeURIComponent(params.location);
   const client = await clientPromise;
   const db = client.db(process.env.MONGODB_DB_NAME);

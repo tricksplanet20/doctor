@@ -31,7 +31,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onSearch, specialties, locati
           <div className={styles.searchContainer}>
             <SearchBar
               onSearch={onSearch}
-              specialties={specialties}
+              specialties={specialties?.map(String) || []}
               loading={loading}
             />
           </div>

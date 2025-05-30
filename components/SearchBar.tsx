@@ -24,6 +24,9 @@ export default function SearchBar({ onSearch, specialties = [], loading = false 
     sortBy: 'name'
   });
 
+  // Ensure specialties array always contains strings
+  const sanitizedSpecialties = specialties.map(s => String(s));
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
@@ -99,7 +102,7 @@ export default function SearchBar({ onSearch, specialties = [], loading = false 
             disabled={loading}
           >
             <option value="">All Specialities</option>
-            {specialties.map((specialty) => (
+            {sanitizedSpecialties.map((specialty) => (
               <option key={specialty} value={specialty}>
                 {specialty}
               </option>

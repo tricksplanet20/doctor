@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import SchemaOrg from './SchemaOrg';
 import Head from 'next/head';
 import Link from 'next/link';
+import { createSafeUrl } from '@/lib/urlHelpers';
 
 const Doctor = dynamic(() => import('./Doctor'), {
   loading: () => <Loading />,
@@ -51,7 +52,7 @@ interface HomePageContentProps {
   specialties: string[];
   locations: string[];
   hospitals: string[];
-  popularSpecialties: { name: string; location: string; count: number }[];
+  popularSpecialties: { name: string; location: string; count: number; slug: string }[];
 }
 
 export default function HomePageContent({
@@ -102,7 +103,12 @@ export default function HomePageContent({
     const pairs = (data.pairs || []).filter((pair: any) => pair.location === location)
       .sort((a: any, b: any) => b.count - a.count)
       .slice(0, 10)
-      .map((pair: any) => ({ name: pair.speciality, location: pair.location, count: pair.count }));
+      .map((pair: any) => ({
+        name: pair.name,
+        location: pair.location,
+        count: pair.count,
+        slug: pair.slug
+      }));
     setPopularSpecialties(pairs);
     setLoading(false);
   };
@@ -174,9 +180,11 @@ export default function HomePageContent({
   const allDoctors = initialDoctors; // Should be the full list, not paginated
 
   // For specialties, show only those with at least one doctor in the selected location
-  const specialtiesWithDoctors = specialties.filter(specialty =>
-    allDoctors.some(doc => doc.Speciality === specialty && doc.Location === selectedLocation)
-  );
+  const specialtiesWithDoctors = specialties
+    .map(specialty => String(specialty))
+    .filter(specialty =>
+      allDoctors.some(doc => doc.Speciality === specialty && doc.Location === selectedLocation)
+    );
   // For hospitals, show only those with at least one doctor in the selected location
   const hospitalsWithDoctors = hospitals.filter(hospital =>
     allDoctors.some(doc => doc["Hospital Name"] === hospital && doc.Location === selectedLocation)
@@ -224,10 +232,10 @@ export default function HomePageContent({
           </div>
           <div className={styles.quickSpecialtyNavGrid}>
             {popularSpecialties
-              .map(({ name, location, count }) => (
+              .map(({ name, location, count, slug }) => (
                 <Link
                   key={name}
-                  href={`/specialists/${encodeURIComponent(location)}/${name.toLowerCase().replace(/\s+/g, '-')}`}
+                  href={`/specialists/${encodeURIComponent(location)}/${slug}`}
                   className={styles.quickSpecialtyNavLink}
                 >
                   <span>{name}</span>
